@@ -1,12 +1,18 @@
 var url = window.location.href;
 var swLocation = "/twittor/sw.js";
+var swReg;
 
 if (navigator.serviceWorker) {
   if (url.includes("localhost")) {
     swLocation = "/sw.js";
   }
 
-  navigator.serviceWorker.register(swLocation);
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register(swLocation).then(function (reg) {
+      swReg = reg;
+      swReg.pushManager.getSubscription().then(verificaSuscripcion);
+    });
+  });
 }
 
 // Referencias de jQuery
@@ -24,6 +30,8 @@ var modalAvatar = $("#modal-avatar");
 var avatarBtns = $(".seleccion-avatar");
 var txtMensaje = $("#txtMensaje");
 
+var btnActivadas = $(".btn-noti-activadas");
+var btnDesactivadas = $(".btn-noti-desactivadas");
 // El usuario, contiene el ID del hÃ©roe seleccionado
 var usuario;
 
@@ -177,3 +185,101 @@ window.addEventListener("online", isOnline);
 window.addEventListener("offline", isOnline);
 
 isOnline();
+
+//* Notificaciones
+
+function verificaSuscripcion(activadas) {
+
+  if (activadas) {
+    btnActivadas.removeClass("oculto");
+    btnDesactivadas.addClass("oculto");
+  } else {
+    btnActivadas.addClass("oculto");
+    btnDesactivadas.removeClass("oculto");
+  }
+}
+
+function enviarNotificacion() {
+  const notificationOpts = {
+    body: "Este es el cuerpo de la notificación",
+    icon: "img/icons/icon-72x72.png",
+  };
+
+  const n = new Notification("Hola Mundo", notificationOpts);
+  n.onclick = () => {
+    console.log("Click");
+  };
+}
+
+function notificarme() {
+  if (!window.Notification) {
+    console.log("Este navegador no soporta notificaciones");
+    return;
+  }
+
+  if (Notification.permission === "granted") {
+    // new Notification("Hola Mundo! - granted");
+    enviarNotificacion();
+  } else if (
+    Notification.permission !== "denied" ||
+    Notification.permission === "default"
+  ) {
+    Notification.requestPermission(function (permission) {
+      console.log(permission);
+
+      if (permission === "granted") {
+        // new Notification("Hola Mundo - pregunta");
+        enviarNotificacion();
+      }
+    });
+  }
+}
+
+// notificarme();
+
+//Get Key
+function getPublicKey() {
+  return (
+    fetch("api/key")
+      .then((res) => res.arrayBuffer())
+      //retornar como un Uniy8array
+      .then((key) => new Uint8Array(key))
+  );
+}
+
+// getPublicKey().then(console.log);
+
+btnDesactivadas.on("click", function () {
+  if (!swReg) return console.log("No hay registro del SW");
+
+  getPublicKey().then(function (key) {
+    swReg.pushManager
+      .subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: key,
+      })
+      .then((res) => res.toJSON())
+      .then((susscription) => {
+        // console.log(susscription);
+        fetch("api/subscribe", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(susscription),
+        })
+          .then(verificaSuscripcion)
+          .catch(cancelarSuscripcion);
+      });
+  });
+});
+
+function cancelarSuscripcion() {
+  swReg.pushManager.getSubscription().then((subs) => {
+    subs.unsubscribe().then(() => verificaSuscripcion(false));
+  });
+}
+
+btnActivadas.on("click", function () {
+  cancelarSuscripcion();
+});
