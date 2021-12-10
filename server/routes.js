@@ -52,7 +52,15 @@ router.get("/key", (req, res) => {
 //* Enviar una notificación push a las personas que nosostros queramos
 //* Normalmente se controla del lado del server
 router.post("/push", (req, res) => {
-  res.json("push notification");
+  const post = {
+    titulo: req.body.titulo,
+    cuerpo: req.body.cuerpo,
+    usuario: req.body.usuario,
+  };
+
+  push.sendPush(post);
+
+  res.json(post);
 });
 
 module.exports = router;
